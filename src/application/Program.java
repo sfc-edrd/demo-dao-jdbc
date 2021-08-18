@@ -20,9 +20,13 @@ public class Program {
 		
 		System.out.println("\n=========== FindByDepartment ===========");
 		Department department = new Department(2,null);
-		List<Seller> sellers = new ArrayList<>(sellerdao.findByDepartment(department));
-		sellers.stream().forEach(System.out::println);
-
+		List<Seller> sellersById = new ArrayList<>(sellerdao.findByDepartment(department));
+		sellersById.stream().forEach(System.out::println);
+		
+		System.out.println("\n=========== FindByAll ===========");
+		List<Seller> sellersByAll = new ArrayList<>();
+		sellersByAll = sellerdao.findAll();
+		sellersByAll.stream().forEach(System.out::println);
 	}
 
 }

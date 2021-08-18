@@ -5,7 +5,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import db.DB;
 import db.DbException;
@@ -22,25 +24,36 @@ public class SellerDaoJDBC implements SellerDao {
 	private Seller seller = null;
 	private List<Seller> sellers = new ArrayList<>();
 	private String queryBody = null;
+	private Map<Integer, Department> mapDepartments = new HashMap<Integer, Department>();
 	
 	public SellerDaoJDBC(Connection conn) {
 		this.conn = conn;
 	}
 	
-	private void runQuery(String queryBody, int i, Integer id) throws SQLException {
+	private void runQuery(String queryBody, Integer i, Integer id) throws SQLException {
+		sellers.clear();
 		conn = DB.getConnection();
 		st = conn.prepareStatement(queryBody);
-
-		st.setInt(i, id);
+		
+		if (i != null && id != null)
+			st.setInt(i, id);
 		rs = st.executeQuery();
 	}
 
 	private void instantiateDepartment(ResultSet rs) throws SQLException {
 		
-		if (department == null) 
-			department = new Department();
-		department.setId(rs.getInt("DepartmentId"));
-		department.setName(rs.getString("DepName"));
+		int departmentId = rs.getInt("DepartmentId");
+		String departmentName = rs.getString("DepName");
+		
+		Department depMapped = mapDepartments.putIfAbsent(departmentId, new Department(departmentId, departmentName));
+		
+		if (department == null) {
+			department = depMapped != null 
+					? depMapped
+					: new Department(departmentId, departmentName);
+		}
+		department.setId(departmentId);
+		department.setName(departmentName);
 	}
 	
 	private void instantiateSeller(ResultSet rs, Department department) throws SQLException {
@@ -51,6 +64,12 @@ public class SellerDaoJDBC implements SellerDao {
 		seller.setBirthdate(rs.getDate("BirthDate"));
 		seller.setBaseSalary(rs.getDouble("BaseSalary"));
 		seller.setDepartmentId(department);
+	}
+	
+	private void closeObs() {
+		DB.closeResultSet(rs);
+		DB.closeStatement(st);
+
 	}
 
 	@Override
@@ -88,6 +107,7 @@ public class SellerDaoJDBC implements SellerDao {
 			if (rs.next()) {
 
 				// Instantiate the Department
+				department = null;
 				instantiateDepartment(rs);
 				
 				// Instantiate the Seller
@@ -99,12 +119,41 @@ public class SellerDaoJDBC implements SellerDao {
 		} catch (SQLException e) {
 			throw new DbException(e.getMessage());
 		}
+		finally {
+			closeObs();
+		}
 	}
 
 	@Override
 	public List<Seller> findAll() {
-		// TODO Auto-generated method stub
-		return null;
+		queryBody =  
+				  "SELECT se.*, dep.Name as DepName "
+				+ "FROM coursejdbc.seller as se " 
+				+ "INNER JOIN coursejdbc.department as dep "
+				+ "ON se.DepartmentId = dep.Id " 
+				+ "ORDER BY se.Name";
+				
+		try {
+			
+			runQuery(queryBody, null, null);
+			
+			while (rs.next()) {
+
+				// Instantiate the Department
+				department = null;
+				instantiateDepartment(rs);
+				
+				// Instantiate the Seller
+				instantiateSeller(rs, department);
+				sellers.add(seller);
+			}
+			return sellers;
+			
+		} catch (SQLException e) {
+			throw new DbException(e.getMessage());
+		} finally {
+			closeObs();
+		}
 	}
 
 	@Override
@@ -114,7 +163,8 @@ public class SellerDaoJDBC implements SellerDao {
 				+ "FROM coursejdbc.seller as se " 
 				+ "INNER JOIN coursejdbc.department as dep "
 				+ "ON se.DepartmentId = dep.Id " 
-				+ "WHERE dep.id = ?";
+				+ "WHERE dep.id = ? "
+				+ "ORDER BY se.Name";
 				
 		try {
 			
@@ -128,13 +178,17 @@ public class SellerDaoJDBC implements SellerDao {
 				
 				// Instantiate the Seller
 				instantiateSeller(rs, department);
-				sellers.add(seller);
+				sellers.add(seller);	
 			}
+			
 			return sellers;
 			
 		} catch (SQLException e) {
 			throw new DbException(e.getMessage());
+		} finally {
+			closeObs();
 		}
+		
 	}
 
 }
